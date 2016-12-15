@@ -1,53 +1,46 @@
 from rgb_cie import Converter
 from PIL import ImageGrab
-import json
 import httplib2
 import time
+from qhue import Bridge
 
-setting_device = 'newdeveloper'
-setting_light = '6'
-setting_bridge = '192.168.1.223'
+setting_device = 'yourappid'
+setting_bridge = 'yourbridgeip'
+setting_light_count = 4
+b = Bridge(setting_bridge, setting_device)
 
+globvar = 0
 
+def set_globvar_one(x):
+    global globvar    # Needed to modify global copy of globvar
+    globvar = x
+set_globvar_one(0)
+def set_globvar_two(x):
+    global globvar_two    # Needed to modify global copy of globvar
+    globvar_two = x
+set_globvar_two(0)
 def mainLoop():
-    setup()
-    
+
     while True:
         start()
-        
-def setup():
-    path = 'lights/' + setting_light + '/state'
-    #turn light on first and set saturation to max
-    parameters = '{"on": true, "sat": 254}'
-    result = json_request('PUT', path, parameters)    
 
 def start():
     x, y = getPixels()
     changeLight(x,y)
-    time.sleep(.2)
-    
-    
-    
-def json_request(method, path=None, body=None):
-    final_path = 'http://' + setting_bridge + '/api/' + setting_device + '/' + path
-    connection = httplib2.Http()
-    response, content = connection.request(
-        uri=final_path,
-        method=method,
-        headers={'Content-Type': 'application/json; charset=UTF-8'},
-        body=body,
-    )
-    
-    #determine success
-    result = json.loads(content.decode())
-    return result
+    time.sleep(.05)
 
 def changeLight(x, y):
-    x = round(x, 4)
-    y = round(y, 4)
-    put_path = 'lights/' + setting_light + '/state'
-    parameters = '{}{},{}{}'.format('{"xy": [', x,y, '], "sat":254}')
-    result = json_request('PUT', put_path, parameters)
+    x = round(x, 2)
+    y = round(y, 2)
+    if globvar - .01 < x < globvar + .01:
+        x = globvar
+    set_globvar_one(x)
+    if globvar_two - .01 < y < globvar_two + .01:
+        y = globvar_two
+    set_globvar_two(y)
+
+    for t in range(1,setting_light_count+1):
+        b.lights(t, 'state', bri=255, on=True, xy=[x, y])
 
 def getPixels():
         #grab screenshot and get the size
@@ -61,7 +54,7 @@ def getPixels():
             for x in range(0, maxX, step):
                 pixel = im[x,y]
                 data.append(pixel)
-                
+
         #loop and check for white/black to exclude from averaging
         r = 0
         g = 0
@@ -70,7 +63,7 @@ def getPixels():
         threshMax = 200
         counter = 0
         for z in range(len(data)):
-            rP, gP, bP = data[z]
+            rP, gP, bP, brightness = data[z]
             if rP > threshMax and gP > threshMax and bP > threshMax or rP < threshMin and gP < threshMin and bP < threshMin:
                 pass
             else:
@@ -78,16 +71,16 @@ def getPixels():
                 g+= gP
                 b+= bP
                 counter+= 1
-        if counter > 0:        
+        if counter > 0:
             rAvg = r/counter
             gAvg = g/counter
             bAvg = b/counter
-            
+
             converter = Converter()
             hueColor = converter.rgbToCIE1931(rAvg, gAvg, bAvg)
             return hueColor
         else:
             print('problem')
             return (0,0)
-            
-mainLoop() 
+
+mainLoop()
